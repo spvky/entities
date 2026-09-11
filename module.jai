@@ -1,4 +1,4 @@
-#module_parameters(ENTITY_HEADER_TYPE: Type = struct {});
+#module_parameters(ENTITY_HEADER_TYPE: Type = struct {}, ENTITY_ALIAS := "Entity");
 Entity_Manager :: struct($HEADER_TYPE: Type) {
     items: [..]Raw_Entity(HEADER_TYPE);
     freelist: [..]Entity_Handle;
@@ -11,6 +11,14 @@ Entity_Manager :: struct($HEADER_TYPE: Type) {
 Entity_Handle :: struct {
     index: u32;
     generation: u32;
+}
+
+// #insert "Cool_Man :s32:4;" :: ;
+// #insert ENTITY_ALIAS :: Raw_Entity(ENTITY_HEADER_TYPE);;
+#insert #run alias_string();
+
+alias_string :: () -> string {
+    return sprint("% :: Raw_Entity(ENTITY_HEADER_TYPE);", ENTITY_ALIAS);
 }
 
 NULL_HANDLE :: Entity_Handle.{};
@@ -29,8 +37,6 @@ Raw_Entity :: struct($HEADER_TYPE: Type) {
     #as using header: HEADER_TYPE;
     using footer: Entity_Footer;
 }
-
-Entity :: Raw_Entity(ENTITY_HEADER_TYPE);
 
 Entity_Footer :: struct {
     handle: Entity_Handle;
@@ -53,7 +59,7 @@ entities_free :: (e: *Entity_Manager = context.entities) {
     array_free(e.freelist);
 }
 
-entity_add :: (new_entity: Entity, e: *Entity_Manager = context.entities) -> Entity_Handle {
+entity_add :: (new_entity: Raw_Entity(ENTITY_HEADER_TYPE), e: *Entity_Manager = context.entities) -> Entity_Handle {
     should_init();
     entity := new_entity;
     print("%\n", e);
@@ -67,7 +73,7 @@ entity_add :: (new_entity: Entity, e: *Entity_Manager = context.entities) -> Ent
     }
 
     if e.items.count == 0 {
-        array_add(*e.items, Entity.{});
+        array_add(*e.items, Raw_Entity(ENTITY_HEADER_TYPE).{});
     }
 
     index := cast(u32)e.items.count;
@@ -78,7 +84,7 @@ entity_add :: (new_entity: Entity, e: *Entity_Manager = context.entities) -> Ent
     return entity.handle;
 }
 
-entity_get :: (handle: Entity_Handle, e: *Entity_Manager = context.entities) -> *Entity {
+entity_get :: (handle: Entity_Handle, e: *Entity_Manager = context.entities) -> *Raw_Entity(ENTITY_HEADER_TYPE) {
     should_init();
     if handle.index > 0 && cast(int)handle.index < e.items.count && e.items[handle.index].handle == handle {
         return *e.items[handle.index];
@@ -126,7 +132,7 @@ entity_valid :: (handle: Entity_Handle, e: *Entity_Manager = context.entities) -
     return entity_get(handle, e) != null;
 }
 
-entity_add_child :: (parent_handle: Entity_Handle, child_entity: Entity, e: *Entity_Manager = context.entities) -> Entity_Handle {
+entity_add_child :: (parent_handle: Entity_Handle, child_entity: Raw_Entity(ENTITY_HEADER_TYPE), e: *Entity_Manager = context.entities) -> Entity_Handle {
     should_init();
     child_handle: Entity_Handle;
     // check if parent is still valid
