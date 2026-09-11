@@ -1,6 +1,6 @@
 #module_parameters(ENTITY_HEADER_TYPE: Type = struct {});
 Entity_Manager :: struct($HEADER_TYPE: Type) {
-    items: [..]Entity(HEADER_TYPE);
+    items: [..]Raw_Entity(HEADER_TYPE);
     freelist: [..]Entity_Handle;
     count: u32;
 }
@@ -25,10 +25,12 @@ handle_compare :: (a: Entity_Handle, b: Entity_Handle) -> bool {
 
 handle_hash :: (a: Entity_Handle) -> u32 {return sdbm_hash(*a, size_of(Entity_Handle));}
 
-Entity :: struct($HEADER_TYPE: Type) {
+Raw_Entity :: struct($HEADER_TYPE: Type) {
     #as using header: HEADER_TYPE;
     using footer: Entity_Footer;
 }
+
+Entity :: Raw_Entity(ENTITY_HEADER_TYPE);
 
 Entity_Footer :: struct {
     handle: Entity_Handle;
@@ -51,7 +53,7 @@ entities_free :: (e: *Entity_Manager = context.entities) {
     array_free(e.freelist);
 }
 
-entity_add :: (new_entity: Entity(ENTITY_HEADER_TYPE), e: *Entity_Manager = context.entities) -> Entity_Handle {
+entity_add :: (new_entity: Entity, e: *Entity_Manager = context.entities) -> Entity_Handle {
     should_init();
     entity := new_entity;
     print("%\n", e);
@@ -65,7 +67,7 @@ entity_add :: (new_entity: Entity(ENTITY_HEADER_TYPE), e: *Entity_Manager = cont
     }
 
     if e.items.count == 0 {
-        array_add(*e.items, Entity(ENTITY_HEADER_TYPE).{});
+        array_add(*e.items, Entity.{});
     }
 
     index := cast(u32)e.items.count;
@@ -76,7 +78,7 @@ entity_add :: (new_entity: Entity(ENTITY_HEADER_TYPE), e: *Entity_Manager = cont
     return entity.handle;
 }
 
-entity_get :: (handle: Entity_Handle, e: *Entity_Manager = context.entities) -> *Entity(ENTITY_HEADER_TYPE) {
+entity_get :: (handle: Entity_Handle, e: *Entity_Manager = context.entities) -> *Entity {
     should_init();
     if handle.index > 0 && cast(int)handle.index < e.items.count && e.items[handle.index].handle == handle {
         return *e.items[handle.index];
