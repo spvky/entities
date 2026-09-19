@@ -62,7 +62,6 @@ entities_free :: (e: *Entity_Manager = context.entities) {
 entity_add :: (new_entity: Raw_Entity(ENTITY_HEADER_TYPE), e: *Entity_Manager = context.entities) -> Entity_Handle {
     should_init();
     entity := new_entity;
-    print("%\n", e);
     if e.freelist.count > 0 {
         handle := pop(*e.freelist);
         handle.generation += 1;
@@ -96,27 +95,27 @@ entity_remove :: (handle: Entity_Handle, e: *Entity_Manager = context.entities, 
     should_init();
     if handle.index > 0 && cast(int)handle.index < e.items.count && e.items[handle.index].handle == handle {
         entity := entity_get(handle);
-        if entity.first_child != NULL_HANDLE {
+        if entity_valid(entity.first_child) {
             current_child := entity_get(entity.first_child);
 
-            while current_child.next_sibling != NULL_HANDLE {
+            while entity_valid(current_child.next_sibling) {
                 entity_remove(current_child.next_sibling, depth = depth + 1);
             }
 
             entity_remove(entity.first_child, depth = depth + 1);
         }
 
-        if entity.next_sibling != NULL_HANDLE {
+        if entity_valid(entity.next_sibling) {
             next_sibling := entity_get(entity.next_sibling);
             next_sibling.prev_sibling = entity.prev_sibling;
         }
 
-        if entity.prev_sibling != NULL_HANDLE {
+        if entity_valid(entity.prev_sibling) {
             prev_sibling := entity_get(entity.prev_sibling);
             prev_sibling.next_sibling = entity.next_sibling;
         }
 
-        if entity.prev_sibling == NULL_HANDLE && entity.parent != NULL_HANDLE {
+        if !entity_valid(entity.prev_sibling) && entity_valid(entity.parent) {
             parent := entity_get(entity.parent);
             parent.first_child = entity.next_sibling;
         }
@@ -138,7 +137,7 @@ entity_add_child :: (parent_handle: Entity_Handle, child_entity: Raw_Entity(ENTI
     // check if parent is still valid
     if entity_valid(parent_handle) {
         child_handle = entity_add(child_entity);
-        if child_handle == NULL_HANDLE {
+        if !entity_valid(child_handle) {
             return child_handle;
         }
 
@@ -151,7 +150,7 @@ entity_add_child :: (parent_handle: Entity_Handle, child_entity: Raw_Entity(ENTI
         //        (parent_ptr.first_child != NULL_HANDLE && parent_ptr.last_child != NULL_HANDLE));
 
         child_ptr.prev_sibling = parent_ptr.last_child;
-        if parent_ptr.last_child == NULL_HANDLE {
+        if !entity_valid(parent_ptr.last_child) {
             parent_ptr.first_child = child_handle;
             parent_ptr.last_child = child_handle;
         } else {
