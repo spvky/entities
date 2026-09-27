@@ -1,25 +1,29 @@
-#module_parameters(ENTITY_HEADER_TYPE: Type = struct {}, ENTITY_ALIAS := "Entity");
-Entity_Manager :: struct($HEADER_TYPE: Type) {
+#module_parameters(ENTITY_HEADER_TYPE: Type = struct {}, ENTITY_ALIAS := "Entity", ENTITY_MANAGER_ALIAS := "Entity_Manager");
+
+Raw_Entity_Manager :: struct($HEADER_TYPE: Type) {
     items: [..]Raw_Entity(HEADER_TYPE);
     freelist: [..]Entity_Handle;
     count: u32;
 }
 #assert (is_constant(ENTITY_HEADER_TYPE));
 
-#add_context entities: *Entity_Manager(ENTITY_HEADER_TYPE);
-
 Entity_Handle :: struct {
     index: u32;
     generation: u32;
 }
 
-// #insert "Cool_Man :s32:4;" :: ;
-// #insert ENTITY_ALIAS :: Raw_Entity(ENTITY_HEADER_TYPE);;
-#insert #run alias_string();
+#insert #run entity_alias_string();
+#insert #run entity_manager_alias_string();
 
-alias_string :: () -> string {
+entity_alias_string :: () -> string {
     return sprint("% :: Raw_Entity(ENTITY_HEADER_TYPE);", ENTITY_ALIAS);
 }
+
+entity_manager_alias_string :: () -> string {
+    return sprint("% :: Raw_Entity_Manager(ENTITY_HEADER_TYPE);", ENTITY_ALIAS);
+}
+
+#add_context entities: *Raw_Entity_Manager(ENTITY_HEADER_TYPE);
 
 NULL_HANDLE :: Entity_Handle.{};
 
@@ -48,19 +52,20 @@ Entity_Footer :: struct {
 }
 
 entities_clear :: (e: *Entity_Manager = context.entities) {
-    should_init();
+    SHOULD_INIT();
     array_reset_keeping_memory(*e.items);
     array_reset_keeping_memory(*e.freelist);
+    e.count = 0;
 }
 
 entities_free :: (e: *Entity_Manager = context.entities) {
-    should_init();
+    SHOULD_INIT();
     array_free(e.items);
     array_free(e.freelist);
 }
 
 entity_add :: (new_entity: Raw_Entity(ENTITY_HEADER_TYPE), e: *Entity_Manager = context.entities) -> Entity_Handle {
-    should_init();
+    SHOULD_INIT();
     entity := new_entity;
     if e.freelist.count > 0 {
         handle := pop(*e.freelist);
@@ -84,39 +89,39 @@ entity_add :: (new_entity: Raw_Entity(ENTITY_HEADER_TYPE), e: *Entity_Manager = 
 }
 
 entity_get :: (handle: Entity_Handle, e: *Entity_Manager = context.entities) -> *Raw_Entity(ENTITY_HEADER_TYPE) {
-    should_init();
+    SHOULD_INIT();
     if handle.index > 0 && cast(int)handle.index < e.items.count && e.items[handle.index].handle == handle {
         return *e.items[handle.index];
     }
     return null;
 }
 
-entity_remove :: (handle: Entity_Handle, e: *Entity_Manager = context.entities, depth := 0) {
-    should_init();
+entity_remove :: (handle: Entity_Handle, e: *Entity_Manager = context.entities) {
+    SHOULD_INIT();
     if handle.index > 0 && cast(int)handle.index < e.items.count && e.items[handle.index].handle == handle {
-        entity := entity_get(handle);
-        if entity_valid(entity.first_child) {
-            current_child := entity_get(entity.first_child);
+        entity := entity_get(handle, e = e);
+        if entity_valid(entity.first_child, e = e) {
+            current_child := entity_get(entity.first_child, e = e);
 
-            while entity_valid(current_child.next_sibling) {
-                entity_remove(current_child.next_sibling, depth = depth + 1);
+            while entity_valid(current_child.next_sibling, e = e) {
+                entity_remove(current_child.next_sibling, e = e);
             }
 
-            entity_remove(entity.first_child, depth = depth + 1);
+            entity_remove(entity.first_child, e = e);
         }
 
-        if entity_valid(entity.next_sibling) {
-            next_sibling := entity_get(entity.next_sibling);
+        if entity_valid(entity.next_sibling, e = e) {
+            next_sibling := entity_get(entity.next_sibling, e = e);
             next_sibling.prev_sibling = entity.prev_sibling;
         }
 
-        if entity_valid(entity.prev_sibling) {
-            prev_sibling := entity_get(entity.prev_sibling);
+        if entity_valid(entity.prev_sibling, e = e) {
+            prev_sibling := entity_get(entity.prev_sibling, e = e);
             prev_sibling.next_sibling = entity.next_sibling;
         }
 
-        if !entity_valid(entity.prev_sibling) && entity_valid(entity.parent) {
-            parent := entity_get(entity.parent);
+        if !entity_valid(entity.prev_sibling, e = e) && entity_valid(entity.parent, e = e) {
+            parent := entity_get(entity.parent, e = e);
             parent.first_child = entity.next_sibling;
         }
 
@@ -127,22 +132,22 @@ entity_remove :: (handle: Entity_Handle, e: *Entity_Manager = context.entities, 
 }
 
 entity_valid :: (handle: Entity_Handle, e: *Entity_Manager = context.entities) -> bool {
-    should_init();
-    return entity_get(handle, e) != null;
+    SHOULD_INIT();
+    return entity_get(handle, e = e) != null;
 }
 
 entity_add_child :: (parent_handle: Entity_Handle, child_entity: Raw_Entity(ENTITY_HEADER_TYPE), e: *Entity_Manager = context.entities) -> Entity_Handle {
-    should_init();
+    SHOULD_INIT();
     child_handle: Entity_Handle;
     // check if parent is still valid
-    if entity_valid(parent_handle) {
-        child_handle = entity_add(child_entity);
-        if !entity_valid(child_handle) {
+    if entity_valid(parent_handle, e = e) {
+        child_handle = entity_add(child_entity, e = e);
+        if !entity_valid(child_handle, e = e) {
             return child_handle;
         }
 
-        parent_ptr := entity_get(parent_handle);
-        child_ptr := entity_get(child_handle);
+        parent_ptr := entity_get(parent_handle, e = e);
+        child_ptr := entity_get(child_handle, e = e);
         child_ptr.parent = parent_handle;
 
         // you can also keep a handle to the last child to avoid iterating the list when inserting
@@ -150,11 +155,11 @@ entity_add_child :: (parent_handle: Entity_Handle, child_entity: Raw_Entity(ENTI
         //        (parent_ptr.first_child != NULL_HANDLE && parent_ptr.last_child != NULL_HANDLE));
 
         child_ptr.prev_sibling = parent_ptr.last_child;
-        if !entity_valid(parent_ptr.last_child) {
+        if !entity_valid(parent_ptr.last_child, e = e) {
             parent_ptr.first_child = child_handle;
             parent_ptr.last_child = child_handle;
         } else {
-            prev_sibling := entity_get(parent_ptr.last_child);
+            prev_sibling := entity_get(parent_ptr.last_child, e = e);
             prev_sibling.next_sibling = child_handle;
             parent_ptr.last_child = child_handle;
         }
@@ -173,7 +178,7 @@ for_expansion :: (e: *Entity_Manager, body: Code, flags: For_Flags) #expand {
     }
 }
 
-should_init :: () #expand {
+SHOULD_INIT :: () #expand {
     print("Entities Initialized\n");
     if !context.entities {
         context.entities = New(Entity_Manager(ENTITY_HEADER_TYPE));
